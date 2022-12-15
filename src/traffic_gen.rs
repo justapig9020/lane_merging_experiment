@@ -1,11 +1,12 @@
+use std::time::Duration;
+
 use itertools::concat;
+use itertools::Itertools;
 use rand_distr::Distribution;
 use rand_distr::Poisson;
 
 #[derive(Debug)]
-struct Lane {
-    earlist_arrival_times: Vec<usize>,
-}
+pub struct Lane(Vec<Duration>);
 
 #[derive(Debug)]
 pub struct Traffic {
@@ -13,18 +14,27 @@ pub struct Traffic {
 }
 
 impl Traffic {
-    pub fn new(lamdba: f32, count: usize) -> Self {
+    pub fn generate(lamdba: f32, count: usize) -> Self {
         let lane_count = 2;
         let mut lanes = Vec::with_capacity(lane_count);
         for _ in 0..lane_count {
-            lanes.push(Lane::new(lamdba, count));
+            lanes.push(Lane::generate(lamdba, count));
         }
         Self { lanes }
+    }
+    pub fn earlist_arrival_times(&self) -> Vec<&[Duration]> {
+        self.lanes
+            .iter()
+            .map(|lane| lane.0.as_slice())
+            .collect_vec()
     }
 }
 
 impl Lane {
-    fn new(lamdba: f32, count: usize) -> Self {
+    pub fn new(times: Vec<Duration>) -> Self {
+        Lane(times)
+    }
+    fn generate(lamdba: f32, count: usize) -> Self {
         let poi = Poisson::new(lamdba).unwrap();
         let mut sample = rand::thread_rng();
         let mut arrival_count = Vec::with_capacity(count);
@@ -34,10 +44,30 @@ impl Lane {
             arrival_count.push(t);
             total += t;
         }
-        let mut arrival_times = concat(arrival_count.iter().enumerate().map(|(t, c)| vec![t; *c]));
-        arrival_times.resize(count, 0);
+        let mut arrival_times = concat(
+            arrival_count
+                .iter()
+                .enumerate()
+                .map(|(t, c)| vec![Duration::from_secs(t as u64); *c]),
+        );
+        arrival_times.resize(count, Duration::default());
+        Self(arrival_times)
+    }
+    pub fn times(&self) -> &[Duration] {
+        &self.0
+    }
+}
+
+pub struct Parameters {
+    pub w_p: Duration,
+    pub w_e: Duration,
+}
+
+impl Default for Parameters {
+    fn default() -> Self {
         Self {
-            earlist_arrival_times: arrival_times,
+            w_p: Duration::from_secs(3),
+            w_e: Duration::from_secs(1),
         }
     }
 }
