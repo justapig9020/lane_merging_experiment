@@ -4,6 +4,7 @@ use itertools::concat;
 use itertools::Itertools;
 use rand_distr::Distribution;
 use rand_distr::Poisson;
+use serde::Serialize;
 
 use crate::scheduler::Schedule;
 

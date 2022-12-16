@@ -41,7 +41,7 @@ fn main() {
             let sol = schd.solve(&traffic, &para).unwrap();
             schedules.insert(schd.method(), sol);
         }
-        report.push(Report::new(&traffic, &schedules));
+        report.push(Report::new(&para, lambda, count, &traffic, &schedules));
     }
     println!("{}", serde_json::to_string(&report).unwrap());
 }

@@ -6,6 +6,7 @@ use serde::Serialize;
 use serde_json::Result;
 
 use crate::scheduler::Schedule;
+use crate::traffic_gen::Parameters;
 use crate::traffic_gen::Traffic;
 
 #[derive(Serialize)]
@@ -22,12 +23,22 @@ impl Timing {
 }
 #[derive(Serialize)]
 pub struct Report {
+    w_e: f32,
+    w_p: f32,
+    lambda: f32,
+    n: usize,
     traffic: Timing,
     methods: HashMap<String, Timing>,
 }
 
 impl Report {
-    pub fn new(traffic: &Traffic, methods: &HashMap<String, Schedule>) -> Self {
+    pub fn new(
+        para: &Parameters,
+        lambda: f32,
+        n: usize,
+        traffic: &Traffic,
+        methods: &HashMap<String, Schedule>,
+    ) -> Self {
         let traffic = Timing::from_durations(&traffic.earlist_arrival_times());
         let methods = methods
             .iter()
@@ -36,6 +47,13 @@ impl Report {
                 (m.clone(), Timing::from_durations(&sets))
             })
             .collect();
-        Self { traffic, methods }
+        Self {
+            w_e: para.w_e.as_secs_f32(),
+            w_p: para.w_p.as_secs_f32(),
+            lambda,
+            n,
+            traffic,
+            methods,
+        }
     }
 }
