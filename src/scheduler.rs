@@ -5,6 +5,7 @@ use itertools::Itertools;
 use crate::traffic_gen::Lane;
 use crate::traffic_gen::Parameters;
 use crate::traffic_gen::Traffic;
+use rand::prelude::*;
 
 const A: usize = 0;
 const B: usize = 1;
@@ -44,6 +45,66 @@ impl Schedule {
             scheduled_entering_times,
             t_last,
         }
+    }
+    fn from_order(order: &[usize], traffic: &Traffic, para: &Parameters) -> Self {
+        let w_e = para.w_e;
+        let w_p = para.w_p;
+        let eats = traffic.earlist_arrival_times();
+        let a = eats.get(0).unwrap();
+        let b = eats.get(1).unwrap();
+        let alpha = a.len();
+        let beta = b.len();
+        let mut i = 0;
+        let mut j = 0;
+        let mut eet = Duration::default(); // Earliest enter time
+        let mut scheduled_entering_times = vec![
+            vec![Duration::default(); alpha],
+            vec![Duration::default(); beta],
+        ];
+        for window in order.windows(2) {
+            let curr_lane = window[0];
+            let next_lane = window[1];
+            let (eat, idx) = if curr_lane == A {
+                (a, &mut i)
+            } else {
+                (b, &mut j)
+            };
+            let set = Duration::max(eat[*idx], eet);
+            scheduled_entering_times[curr_lane][*idx] = set;
+            *idx += 1;
+            eet = set + if curr_lane == next_lane { w_e } else { w_p };
+        }
+
+        let last_lane = order[alpha + beta - 1];
+        let (eat, idx) = if last_lane == A {
+            (a, &mut i)
+        } else {
+            (b, &mut j)
+        };
+        let set = Duration::max(eat[*idx], eet);
+        scheduled_entering_times[last_lane][*idx] = set;
+        let t_last = Duration::max(
+            scheduled_entering_times[A][alpha - 1],
+            scheduled_entering_times[B][beta - 1],
+        );
+        let scheduled_entering_times = scheduled_entering_times
+            .into_iter()
+            .map(|sets| Lane::new(sets))
+            .collect_vec();
+        Self {
+            scheduled_entering_times,
+            t_last,
+        }
+    }
+    fn to_order(self) -> Vec<usize> {
+        let mut flat = self
+            .scheduled_entering_times
+            .iter()
+            .enumerate()
+            .map(|(lane, times)| times.times().iter().map(|t| (t, lane)).collect_vec())
+            .concat();
+        flat.sort();
+        flat.into_iter().map(|(_times, lane)| lane).collect_vec()
     }
 }
 
@@ -205,12 +266,79 @@ impl Scheduler for FCFS {
             i += 1;
         }
 
-        while j < a.len() {
+        while j < b.len() {
             let schedule_time = Duration::max(earlist_enter_times[B], b[j]);
             scheduled_entering_times[B][j] = schedule_time;
             update_eet(&mut earlist_enter_times, schedule_time, B);
             j += 1;
         }
         Some(Schedule::from_scheuled_times(scheduled_entering_times))
+    }
+}
+
+pub struct SimulationAnnealing {
+    w1: u32,
+    w2: u32,
+}
+
+impl Scheduler for SimulationAnnealing {
+    fn method(&self) -> String {
+        String::from("Simulation Annealing")
+    }
+    fn solve(&self, traffic: &Traffic, para: &Parameters) -> Option<Schedule> {
+        let eats = traffic.earlist_arrival_times();
+        let a = eats.get(0)?;
+        let b = eats.get(1)?;
+        let alpha = a.len();
+        let beta = b.len();
+
+        let mut rng = rand::thread_rng();
+
+        /* Randomly choice initial order */
+        let dp = DP;
+        let mut order = dp.solve(traffic, para).unwrap().to_order();
+
+        let schd = Schedule::from_order(&order, traffic, para);
+        let max_delay = traffic.max_delay_time(&schd);
+        let mut best_cost = max_delay * self.w1 + schd.t_last() * self.w2;
+        let mut last_cost = best_cost;
+        let mut best_order = order.clone();
+        let mut temp = 10.0 * last_cost.as_secs_f32();
+
+        for _ in 0..10000 {
+            let x = random::<usize>() % (alpha + beta);
+            let y = random::<usize>() % (alpha + beta);
+            order.swap(x, y);
+            let schd = Schedule::from_order(&order, traffic, para);
+            let max_delay = traffic.max_delay_time(&schd);
+            let cost = max_delay * self.w1 + schd.t_last() * self.w2;
+
+            if cost <= best_cost {
+                best_cost = cost;
+                best_order = order.clone();
+            }
+            if cost <= last_cost {
+                last_cost = cost;
+            } else {
+                let dc = (cost - last_cost).as_secs_f32();
+                let tmp = f32::powf(std::f32::consts::E, (-1.0 * dc) / temp);
+                let r = rng.gen_range(0.0..=1.0);
+                if r > tmp {
+                    order.swap(x, y);
+                }
+            }
+
+            temp /= 2.0;
+            if temp == 0.0 {
+                break;
+            }
+        }
+        Some(Schedule::from_order(&best_order, traffic, para))
+    }
+}
+
+impl SimulationAnnealing {
+    pub fn new(w1: u32, w2: u32) -> Self {
+        Self { w1, w2 }
     }
 }

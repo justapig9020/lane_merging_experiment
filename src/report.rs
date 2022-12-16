@@ -29,6 +29,9 @@ pub struct Report {
     n: usize,
     traffic: Timing,
     methods: HashMap<String, Timing>,
+    max_delay: HashMap<String, f32>,
+    mean_delay: HashMap<String, f32>,
+    t_last: HashMap<String, f32>,
 }
 
 impl Report {
@@ -39,6 +42,18 @@ impl Report {
         traffic: &Traffic,
         methods: &HashMap<String, Schedule>,
     ) -> Self {
+        let max_delay = methods
+            .iter()
+            .map(|(name, schd)| (name.clone(), traffic.max_delay_time(schd).as_secs_f32()))
+            .collect();
+        let mean_delay = methods
+            .iter()
+            .map(|(name, schd)| (name.clone(), traffic.mean_delay_time(schd).as_secs_f32()))
+            .collect();
+        let t_last = methods
+            .iter()
+            .map(|(name, schd)| (name.clone(), schd.t_last().as_secs_f32()))
+            .collect();
         let traffic = Timing::from_durations(&traffic.earlist_arrival_times());
         let methods = methods
             .iter()
@@ -54,6 +69,9 @@ impl Report {
             n,
             traffic,
             methods,
+            max_delay,
+            mean_delay,
+            t_last,
         }
     }
 }

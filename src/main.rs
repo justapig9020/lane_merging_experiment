@@ -10,6 +10,7 @@ use scheduler::Scheduler;
 use scheduler::DP;
 use traffic_gen::Traffic;
 
+use crate::scheduler::SimulationAnnealing;
 use crate::scheduler::FCFS;
 use crate::traffic_gen::Parameters;
 
@@ -28,7 +29,8 @@ fn main() {
     let args = Args::parse();
 
     let para = Parameters::default();
-    let schedulers: Vec<&dyn Scheduler> = vec![&DP, &FCFS];
+    let sa = SimulationAnnealing::new(50, 50);
+    let schedulers: Vec<&dyn Scheduler> = vec![&DP, &FCFS, &sa];
     let mut report = Vec::new();
 
     let count = args.n;
