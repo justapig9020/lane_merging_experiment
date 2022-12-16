@@ -21,6 +21,9 @@ fn main() {
         for schd in schedulers.iter() {
             let sol = schd.solve(&traffic, &para).unwrap();
             println!("{}: {:?}", schd.method(), sol.t_last());
+            println!("Avg: {:?}", traffic.mean_delay_time(&sol));
+            println!("Max: {:?}", traffic.max_delay_time(&sol));
+            println!("");
         }
     }
 }

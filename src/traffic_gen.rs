@@ -5,6 +5,8 @@ use itertools::Itertools;
 use rand_distr::Distribution;
 use rand_distr::Poisson;
 
+use crate::scheduler::Schedule;
+
 #[derive(Debug)]
 pub struct Lane(Vec<Duration>);
 
@@ -27,6 +29,40 @@ impl Traffic {
             .iter()
             .map(|lane| lane.0.as_slice())
             .collect_vec()
+    }
+    pub fn delay_times(&self, schd: &Schedule) -> Vec<Vec<Duration>> {
+        let sets = schd.scheduled_entering_times();
+        self.lanes
+            .iter()
+            .zip(sets.iter())
+            .map(|(eat, set)| {
+                eat.times()
+                    .iter()
+                    .zip(set.iter())
+                    .map(|(e, s)| *s - *e)
+                    .collect_vec()
+            })
+            .collect_vec()
+    }
+    pub fn mean_delay_time(&self, schd: &Schedule) -> Duration {
+        let dts = self.delay_times(&schd);
+        dts.iter()
+            .map(|dt| dt.iter().sum::<Duration>() / dt.len() as u32)
+            .sum::<Duration>()
+            / dts.len() as u32
+    }
+    pub fn max_delay_time(&self, schd: &Schedule) -> Duration {
+        let dts = self.delay_times(&schd);
+        dts.iter()
+            .map(|dt| {
+                dt.iter()
+                    .max()
+                    .and_then(|m| Some(m.clone()))
+                    .unwrap_or_default()
+            })
+            .max()
+            .and_then(|m| Some(m.clone()))
+            .unwrap_or_default()
     }
 }
 
