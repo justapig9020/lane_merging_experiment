@@ -10,7 +10,8 @@ const A: usize = 0;
 const B: usize = 1;
 
 pub trait Scheduler {
-    fn solve(traffic: &Traffic, para: &Parameters) -> Option<Schedule>;
+    fn method(&self) -> String;
+    fn solve(&self, traffic: &Traffic, para: &Parameters) -> Option<Schedule>;
 }
 
 #[derive(Debug)]
@@ -20,7 +21,7 @@ pub struct Schedule {
 }
 
 impl Schedule {
-    pub fn total_time(&self) -> Duration {
+    pub fn t_last(&self) -> Duration {
         self.t_last
     }
     pub fn scheduled_entering_times(&self) -> Vec<&[Duration]> {
@@ -29,12 +30,30 @@ impl Schedule {
             .map(|set| set.times())
             .collect_vec()
     }
+    fn from_scheuled_times(scheduled_entering_times: Vec<Vec<Duration>>) -> Self {
+        let t_last = scheduled_entering_times
+            .iter()
+            .map(|sets| sets.last().map(|t| t.clone()).unwrap_or_default())
+            .max()
+            .unwrap_or_default();
+        let scheduled_entering_times = scheduled_entering_times
+            .into_iter()
+            .map(|sets| Lane::new(sets))
+            .collect_vec();
+        Schedule {
+            scheduled_entering_times,
+            t_last,
+        }
+    }
 }
 
 pub struct DP;
 
 impl Scheduler for DP {
-    fn solve(traffic: &Traffic, para: &Parameters) -> Option<Schedule> {
+    fn method(&self) -> String {
+        String::from("DP")
+    }
+    fn solve(&self, traffic: &Traffic, para: &Parameters) -> Option<Schedule> {
         let eats = traffic.earlist_arrival_times();
         let a = eats.get(0)?;
         let b = eats.get(1)?;
@@ -109,7 +128,7 @@ impl Scheduler for DP {
             }
         }
 
-        let (t_last, last_from) = if l[alpha][beta][A] <= l[alpha][beta][B] {
+        let (_t_last, last_from) = if l[alpha][beta][A] <= l[alpha][beta][B] {
             (l[alpha][beta][A], A)
         } else {
             (l[alpha][beta][B], B)
@@ -130,13 +149,68 @@ impl Scheduler for DP {
             *idx -= 1;
             passing_from = prev_from;
         }
-        let scheduled_entering_times = scheduled_entering_times
-            .into_iter()
-            .map(|set| Lane::new(set))
-            .collect_vec();
-        Some(Schedule {
-            scheduled_entering_times,
-            t_last,
-        })
+        Some(Schedule::from_scheuled_times(scheduled_entering_times))
+    }
+}
+
+pub struct FCFS;
+
+impl Scheduler for FCFS {
+    fn method(&self) -> String {
+        String::from("FCFS")
+    }
+    fn solve(&self, traffic: &Traffic, para: &Parameters) -> Option<Schedule> {
+        let eats = traffic.earlist_arrival_times();
+        let a = eats.get(0)?;
+        let b = eats.get(1)?;
+        let alpha = a.len();
+        let beta = b.len();
+        let w_e = para.w_e; // W= in paper
+        let w_p = para.w_p; // W+ in paper
+
+        let mut scheduled_entering_times = vec![
+            vec![Duration::default(); alpha],
+            vec![Duration::default(); beta],
+        ];
+
+        let mut earlist_enter_times = [Duration::default(), Duration::default()];
+        let update_eet = |eet: &mut [Duration; 2], enter_time: Duration, lane: usize| {
+            if lane == A {
+                eet[A] = enter_time + w_e;
+                eet[B] = enter_time + w_p;
+            } else {
+                eet[A] = enter_time + w_p;
+                eet[B] = enter_time + w_e;
+            }
+        };
+
+        let mut i = 0;
+        let mut j = 0;
+        while i < a.len() && j < b.len() {
+            let (eet, at, lane, idx) = if a[i] <= b[j] {
+                (earlist_enter_times[A], a[i], A, &mut i)
+            } else {
+                (earlist_enter_times[B], b[j], B, &mut j)
+            };
+            let schedule_time = Duration::max(eet, at);
+            scheduled_entering_times[lane][*idx] = schedule_time;
+            *idx += 1;
+            update_eet(&mut earlist_enter_times, schedule_time, lane);
+        }
+
+        while i < a.len() {
+            let schedule_time = Duration::max(earlist_enter_times[A], a[i]);
+            scheduled_entering_times[A][i] = schedule_time;
+            update_eet(&mut earlist_enter_times, schedule_time, A);
+            i += 1;
+        }
+
+        while j < a.len() {
+            let schedule_time = Duration::max(earlist_enter_times[B], b[j]);
+            scheduled_entering_times[B][j] = schedule_time;
+            update_eet(&mut earlist_enter_times, schedule_time, B);
+            j += 1;
+        }
+        Some(Schedule::from_scheuled_times(scheduled_entering_times))
     }
 }

@@ -14,11 +14,11 @@ pub struct Traffic {
 }
 
 impl Traffic {
-    pub fn generate(lamdba: f32, count: usize) -> Self {
+    pub fn generate(lambda: f32, count: usize) -> Self {
         let lane_count = 2;
         let mut lanes = Vec::with_capacity(lane_count);
         for _ in 0..lane_count {
-            lanes.push(Lane::generate(lamdba, count));
+            lanes.push(Lane::generate(lambda, count));
         }
         Self { lanes }
     }
@@ -34,8 +34,8 @@ impl Lane {
     pub fn new(times: Vec<Duration>) -> Self {
         Lane(times)
     }
-    fn generate(lamdba: f32, count: usize) -> Self {
-        let poi = Poisson::new(lamdba).unwrap();
+    fn generate(lambda: f32, count: usize) -> Self {
+        let poi = Poisson::new(lambda).unwrap();
         let mut sample = rand::thread_rng();
         let mut arrival_count = Vec::with_capacity(count);
         let mut total = 0;
